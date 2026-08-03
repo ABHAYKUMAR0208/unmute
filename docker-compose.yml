@@ -1,0 +1,67 @@
+version: "3.9"
+
+services:
+  # FastAPI service: mints LiveKit tokens for the frontend, AND now hosts
+  # the PayU billing/payment API + webhook callbacks (mounted in main.py).
+  token-api:
+    build: ./backend
+    container_name: unmute-token-api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8081:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./crm_outputs:/app/crm_outputs
+      - ./data:/app/data          # PayU worker's SQLite bills DB
+    restart: unless-stopped
+
+  # LiveKit agent worker: joins rooms, bridges audio to Unmute on RunPod.
+  # Same image as token-api, different command/process.
+  agent-worker:
+    build: ./backend
+    container_name: unmute-agent-worker
+    command: python -m app.agent start
+    env_file:
+      - .env
+    volumes:
+      - ./transcripts:/app/transcripts
+      - ./data:/app/data          # same PayU bills DB the webhook writes to
+    restart: unless-stopped
+    depends_on:
+      - token-api
+
+  # CRM worker: polls transcripts/unprocessed/ for finished calls, extracts
+  # intent, validates it, prices it, pushes it to HubSpot, and creates the
+  # PayU bill + payment link.
+  crm-worker:
+    build: ./backend
+    container_name: unmute-crm-worker
+    command: python -m app.crm.worker
+    env_file:
+      - .env
+    volumes:
+      - ./transcripts:/app/transcripts
+      - ./crm_outputs:/app/crm_outputs
+      - ./data:/app/data          # shares the same PayU bills DB as token-api
+    restart: unless-stopped
+    depends_on:
+      - token-api
+
+  # Static test frontend.
+  frontend:
+    build: ./frontend
+    container_name: unmute-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - token-api
+    restart: unless-stopped
+
+  taxi-worker:
+    build: ./backend
+    container_name: unmute-taxi-worker
+    command: python -m app.run_taxi_poller
+    env_file:
+      - .env
+    restart: unless-stopped
