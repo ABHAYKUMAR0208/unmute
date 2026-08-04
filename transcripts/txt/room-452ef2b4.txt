@@ -1,6 +1,0 @@
-=== Session: room-452ef2b4 ===
-[AGENT] May I have your room number, please?
-[USER] Maro, una vez te oró.
-[AGENT] Got it.
-[USER] Maro, una vez te ¿Qué son las nenas del carajo? Maro, un laurero. Descanas, pero descanas, caras.
-[AGENT] I'm here to assist with hotel services. How may I help you today?
