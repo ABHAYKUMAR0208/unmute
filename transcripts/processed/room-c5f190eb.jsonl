@@ -1,0 +1,5 @@
+{"room": "room-c5f190eb", "role": "assistant", "text": "To confirm Room 202, you requested a taxi service for going to the airport at 10 o'clock, with a pickup time of 10 o'clock. Is that correct?", "ts": 1785820633.7782986}
+{"room": "room-c5f190eb", "role": "user", "text": "Correct. Proceed.", "ts": 1785820638.3944213}
+{"room": "room-c5f190eb", "role": "assistant", "text": "Thank you.", "ts": 1785820642.1751957}
+{"room": "room-c5f190eb", "role": "user", "text": "Goodbye.", "ts": 1785820644.6596599}
+{"room": "room-c5f190eb", "role": "assistant", "text": "Thank you and goodbye.", "ts": 1785820665.6701145}

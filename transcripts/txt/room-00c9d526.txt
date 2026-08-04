@@ -1,0 +1,10 @@
+=== Session: room-00c9d526 ===
+[AGENT] May I have your room number,
+[USER] I have you. My room number is 202. And I need food service.
+[AGENT] Got it. What kind of food service are you looking for?
+[USER] I need two cheeseburger and one cold coffee.
+[AGENT] Okay, two cheeseburger and one cold coffee. Is that correct?
+[USER] Correct. That's it.
+[AGENT] Thank you and goodbye.
+[USER] Bye.
+[AGENT] Thank you and goodbye.

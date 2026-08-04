@@ -1,0 +1,18 @@
+=== Session: room-424674ad ===
+[AGENT] May I have your room number, please?
+[USER] My room number is 402.
+[AGENT] Got it. 402. What service do you need?
+[USER] I need food service.
+[AGENT] What items ordered?
+[USER] I would like to have two cheeseburger and one cold coffee.
+[AGENT] Okay, two cheeseburger and one cold coffee. Is there any allergy or preference for the coffee?
+[USER] No, I don't have any allergies. You can proceed with the order.
+[AGENT] Great! Let me confirm that for you two cheeseburger and one cold coffee. Is that correct?
+[USER] Correct.
+[AGENT] Thank you! To confirm Room 402, two cheeseburger, and one cold coffee. Is that correct?
+[USER] Correct.
+[AGENT] Okay, perfect! Let's get that order started.
+[USER] Bye, cousin. Okay, bye.
+[AGENT] Thank you and goodbye.
+[USER] This is going to cover the address, cousin.
+[AGENT] I'm here to assist with hotel services. How may I help you today?

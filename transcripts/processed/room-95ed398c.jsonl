@@ -1,0 +1,12 @@
+{"room": "room-95ed398c", "role": "assistant", "text": "May I have your room number, please?", "ts": 1785822771.9361413}
+{"room": "room-95ed398c", "role": "user", "text": "My room number is 405.", "ts": 1785822777.3051758}
+{"room": "room-95ed398c", "role": "assistant", "text": "Got it. 405. What service can I assist you with today?", "ts": 1785822784.0969255}
+{"room": "room-95ed398c", "role": "user", "text": "I want food service.", "ts": 1785822787.1683893}
+{"room": "room-95ed398c", "role": "assistant", "text": "What items ordered?", "ts": 1785822792.225021}
+{"room": "room-95ed398c", "role": "user", "text": "Please order two pizza and one cold drink.", "ts": 1785822797.0741272}
+{"room": "room-95ed398c", "role": "assistant", "text": "Okay, two pizzas and one cold drink. What kind of drinks would you like?", "ts": 1785822804.093629}
+{"room": "room-95ed398c", "role": "user", "text": "Soft drink.", "ts": 1785822806.4729276}
+{"room": "room-95ed398c", "role": "assistant", "text": "Okay, one soft drink. I'm here to assist with hotel", "ts": 1785822821.0550027}
+{"room": "room-95ed398c", "role": "user", "text": "Okay.", "ts": 1785822823.4032168}
+{"room": "room-95ed398c", "role": "assistant", "text": "Thank you and goodbye.", "ts": 1785822827.1371555}
+{"room": "room-95ed398c", "role": "user", "text": "Good time.", "ts": 1785822829.5137973}

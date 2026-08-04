@@ -1,0 +1,15 @@
+=== Session: room-c5f190eb ===
+[USER] I think I'll do it by decaf.
+[AGENT] May I have your room number,
+[USER] Yeah, my room number is 202 and I need a taxi service.
+[AGENT] Got it. A taxi service, please.
+[USER] Yeah, I need a taxi service for going to airport.
+[AGENT] Okay, airport taxi service. Room number and pickup time, please?
+[USER] My room number is 202. And pick up time is 10 o'clock.
+[AGENT] Okay, 202, taxi service for the airport, 10 o'clock. I'm here
+[USER] Yeah, proceed.
+[AGENT] To confirm Room 202, you requested a taxi service for going to the airport at 10 o'clock, with a pickup time of 10 o'clock. Is that correct?
+[USER] Correct. Proceed.
+[AGENT] Thank you.
+[USER] Goodbye.
+[AGENT] Thank you and goodbye.

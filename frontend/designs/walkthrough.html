@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How it works — Unmute</title>
+<meta name="description" content="See exactly how a live call with Unmute unfolds — from clicking connect to hanging up — in five animated steps.">
+</head>
+<body>
+<!-- Full walkthrough design saved for reference -->
+<!-- 5-step scroll-pinned walkthrough:
+  Step 1: Click connect (cursor animation over coral call button)
+  Step 2: Grant mic access (browser permission popup)
+  Step 3: Talk — it listens live (teal waveform bars animate)
+  Step 4: Watch transcript stream in (violet transcript panel)
+  Step 5: End it anytime (magenta sweep + ended state)
+
+  Layout: sticky pinned pane with 3 columns:
+    - wt-progress: vertical rail with 5 dots + fill bar
+    - wt-captions: 340px, stacked abs positioned .wt-step panels
+    - wt-stage: 420x420px card, all visual layers overlaid
+
+  IntersectionObserver on 5 .walkthrough__marker divs (spaced 100vh apart)
+  drives setStep(n) which toggles data-step attr on #wtStage.
+  Mobile: stack layout, no pinning, no stage (visual only on desktop).
+-->
+</body>
+</html>

@@ -1,0 +1,16 @@
+=== Session: room-c90a1493 ===
+[AGENT] May I have your room number, please? I'm
+[USER] room number is 48.
+[AGENT] Okay, 48. What service would you like?
+[USER] I need taxi service.
+[AGENT] May I have your destination?
+[USER] My taxi service is airport.
+[AGENT] Okay, airport. Do you need any special instructions?
+[USER] You know, I don't need.
+[AGENT] I'm here to assist with hotel services. How may I help you today?
+[USER] I need taxi service.
+[AGENT] Okay, 48. What service would you like?
+[USER] I would like to have taxi service.
+[AGENT] May I have your destination?
+[USER] My destination is airport.
+[AGENT] Okay, airport. Do you need any special instructions?

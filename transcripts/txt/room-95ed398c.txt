@@ -1,0 +1,14 @@
+=== Session: room-95ed398c ===
+[AGENT] May I have your room number, please?
+[USER] My room number is 405.
+[AGENT] Got it. 405. What service can I assist you with today?
+[USER] I want food service.
+[AGENT] What items ordered?
+[USER] Please order two pizza and one cold drink.
+[AGENT] Okay, two pizzas and one cold drink. What kind of drinks would you like?
+[USER] Soft drink.
+[AGENT] Okay, one soft drink. I'm here to assist with hotel
+[USER] Okay.
+[AGENT] Thank you and goodbye.
+[USER] Good time.
+[AGENT] Thank you and goodbye.
