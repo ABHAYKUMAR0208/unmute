@@ -16,6 +16,13 @@ services:
       - ./data:/app/data          # PayU worker's SQLite bills DB
     restart: unless-stopped
 
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0) if urllib.request.urlopen('http://localhost:8000/health').status==200 else sys.exit(1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
   # LiveKit agent worker: joins rooms, bridges audio to Unmute on RunPod.
   # Same image as token-api, different command/process.
   agent-worker:
