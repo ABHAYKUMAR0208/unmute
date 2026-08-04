@@ -1,0 +1,14 @@
+=== Session: room-dd7b4701 ===
+[AGENT] May I have your room number, please?
+[USER] Marloom number is 999.
+[AGENT] Got it. What service do you need?
+[USER] I need food service.
+[AGENT] Okay. What items would you like to order?
+[USER] I would like to have two thaikari and one burger.
+[AGENT] Okay. Do you have any allergies or preferences for the burger?
+[USER] I don't have any allergies.
+[AGENT] Great! And what time would you like your food delivered?
+[USER] Right now,
+[AGENT] Okay.
+[USER] goodbye.
+[AGENT] Thank you and goodbye.

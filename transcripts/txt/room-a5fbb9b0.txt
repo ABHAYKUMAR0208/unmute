@@ -1,0 +1,14 @@
+=== Session: room-a5fbb9b0 ===
+[AGENT] Welcome to Grandview Hotel! I'm Kelly, your hotel assistant. How may I assist you today?
+[USER] Hi, Kelly. I need the food service.
+[AGENT] May I have your room number, please?
+[USER] Maroon number is 999.
+[AGENT] Sure. What service can I assist you with today?
+[USER] With the food service, you can assist me.
+[AGENT] Okay! Let's see… what items would you like?
+[USER] I would like, I would like to have two cheeseburger and one cold coffee.
+[AGENT] Okay, two cheeseburger and one cold coffee. Is there any special instructions for the cold coffee, perhaps a milk preference?
+[USER] No, there is no, not.
+[AGENT] Got it. Two cheeseburger and one cold coffee no special instructions. Is there anything else I can help you with today?
+[USER] No, that's it. Thank you.
+[AGENT] You're very welcome! It was a pleasure assisting you. Have a wonderful day at Grandview Hotel!

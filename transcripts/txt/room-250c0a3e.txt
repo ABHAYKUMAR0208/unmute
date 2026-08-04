@@ -1,0 +1,20 @@
+=== Session: room-250c0a3e ===
+[AGENT] May I have your room number, please?
+[USER] Malum number is
+[AGENT] Got it. What service do you need?
+[USER] I need food service.
+[AGENT] Okay. What items would you like to order?
+[USER] I would like to have two burger and two cold coffee.
+[AGENT] Two burger and two cold coffee. Is that correct?
+[USER] Yes, but before proceeding, can you tell me my room number?
+[AGENT] May I have your room number, please?
+[USER] My room number is 999.
+[AGENT] Okay, 999. What kind of food order would you like?
+[USER] I need two cold coffee and two burger.
+[AGENT] Two cold coffee and two burger. Is that correct?
+[USER] Correct.
+[AGENT] Thank you and goodbye.
+[USER] Bye.
+[AGENT] Thank you and goodbye.
+[USER] Goodbye.
+[AGENT] Thank you and goodbye.

@@ -1,0 +1,8 @@
+=== Session: room-de519ff7 ===
+[AGENT] Welcome to Grandview Hotel! I'm Kelly, your hotel assistant. How may I assist you today?
+[USER] Hi, guys. I need a food service.
+[AGENT] Sure. What kind of food would you like?
+[USER] I would like to have two burger and one cold coffee.
+[AGENT] Okay, two burgers and one cold coffee. Is there anything else you'd like to add?
+[USER] No, that's it.
+[AGENT] "Sure." "Sure."

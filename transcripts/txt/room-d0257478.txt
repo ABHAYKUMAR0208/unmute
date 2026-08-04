@@ -1,0 +1,14 @@
+=== Session: room-d0257478 ===
+[AGENT] May I have your room number, please?
+[USER] My room number is
+[AGENT] Got
+[USER] 999.
+[AGENT] Okay, 999. What service would you like?
+[USER] I like to use food service.
+[AGENT] Sure. What items would you like to order?
+[USER] I would like to have one green tea and two cheese toast.
+[AGENT] Okay, one green tea and two cheese toast. Is there anything else?
+[USER] No, that's it.
+[AGENT] Thank you and goodbye.
+[USER] Goodbye.
+[AGENT] Thank you and goodbye.

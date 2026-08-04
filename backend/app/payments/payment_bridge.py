@@ -57,6 +57,7 @@ from .service_catalog import get_catalog
 from ..crm.hubspot_client import push as crm_push, HubSpotConfigError
 from ..notifications.email import send_email
 from ..notifications.sms import send_sms
+from ..taxi.hubspot_client import fetch_guest as fetch_guest_from_hubspot
 
 logger = logging.getLogger("payments.bridge")
 
@@ -183,6 +184,35 @@ def _extract_guest_info(turns: list[tuple[str, str]]) -> dict:
         info["guest_email"] = email_m.group(0)
     return info
 
+def _merge_guest_info_with_hubspot(room_number: str, transcript_info: dict) -> dict:
+    """
+    Priority: HubSpot's guest record (by room_number) > transcript > placeholder.
+    Blocking HTTP call — caller must wrap in asyncio.to_thread.
+    """
+    merged = dict(transcript_info)
+    try:
+        result = fetch_guest_from_hubspot(room_number=room_number)
+    except Exception:
+        logger.exception("HubSpot guest lookup failed for room %s", room_number)
+        return merged
+
+    if not result.found:
+        logger.info("No HubSpot guest record for room %s — using transcript/placeholder info", room_number)
+        return merged
+
+    if result.guest_name:
+        merged["guest_name"] = result.guest_name
+    if result.guest_email:
+        merged["guest_email"] = result.guest_email
+    if result.guest_phone:
+        merged["guest_phone"] = result.guest_phone
+
+    logger.info(
+        "HubSpot guest match for room %s: name=%s email=%s phone=%s",
+        room_number, merged.get("guest_name"), merged.get("guest_email"), merged.get("guest_phone"),
+    )
+    return merged
+
 
 class PaymentBridge:
     """
@@ -281,6 +311,7 @@ class PaymentBridge:
 
         room = self._room_number or _extract_room_number(full_text) or "000"
         guest_info = _extract_guest_info(all_turns)
+        guest_info = await asyncio.to_thread(_merge_guest_info_with_hubspot, room, guest_info)
 
         item_key = f"{room}:{service_type.value}:{','.join(sorted(i.name for i in items))}"
         if item_key in self._created_keys or item_key in self._creating_keys:

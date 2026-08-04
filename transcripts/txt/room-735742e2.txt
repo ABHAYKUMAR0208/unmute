@@ -1,0 +1,6 @@
+=== Session: room-735742e2 ===
+[AGENT] Welcome to Grandview Hotel! I'm Kelly, your hotel assistant. How may I assist you today?
+[USER] Hi, Kaylee. I need food service.
+[AGENT] May I have your room number, please?
+[USER] My room number is
+[AGENT] Please provide the room number. "Got it." "Sure." "I'm here to assist with hotel services. How may I help you today?" "To confirm Room [number], you requested [service/details] at [time] with [special instructions]. Is that correct?"
