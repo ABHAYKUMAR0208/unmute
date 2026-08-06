@@ -19,7 +19,6 @@ from livekit import rtc
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli
 
 from .config import settings
-from .payments import PaymentBridge
 from .unmute_realtime_session import SAMPLE_RATE, UnmuteRealtimeSession
 from .transcript_writer import TranscriptWriter
 
@@ -39,117 +38,54 @@ async def entrypoint(ctx: JobContext):
             )
         )
 
-    # --- Payment bridge: watches the live transcript and auto-creates a
-    # priced bill + PayU payment link once an order looks closed. ---
-    def on_payment_ready(payment_link: str, bill_text: str, room_number: str):
-        logger.info("Payment link ready for room %s: %s", room_number, payment_link)
-        payload = json.dumps({
-            "type": "payment_ready",
-            "room_number": room_number,
-            "payment_link": payment_link,
-            "bill_text": bill_text,
-        }).encode("utf-8")
-        asyncio.create_task(
-            ctx.room.local_participant.publish_data(payload, reliable=True, topic="payment")
-        )
-
-    def on_payment_confirmed(order_id: str, amount: str, room_number: str):
-        logger.info("Payment confirmed for order %s (room %s): Rs%s", order_id, room_number, amount)
-        payload = json.dumps({
-            "type": "payment_confirmed",
-            "order_id": order_id,
-            "amount": amount,
-            "room_number": room_number,
-        }).encode("utf-8")
-        asyncio.create_task(
-            ctx.room.local_participant.publish_data(payload, reliable=True, topic="payment")
-        )
-
-    payment_bridge = PaymentBridge(
-        on_payment_ready=on_payment_ready,
-        on_payment_confirmed=on_payment_confirmed,
-    )
+    # NOTE: Billing moved to crm/worker.py + payments/billing_service.py.
+    # It now runs AFTER the call ends, using the same LLM-extracted items
+    # already pushed to HubSpot — so bill quantities always match CRM
+    # exactly. Trade-off: the guest gets the payment link a few seconds
+    # after hangup instead of live during the call. See billing_service.py
+    # docstring for details. PaymentBridge (live, regex-based extraction)
+    # is intentionally no longer wired in here to avoid double-billing.
 
     def on_assistant_delta(delta: str):
         logger.info("assistant text: %s", delta)
         publish_transcript("assistant", delta)
         transcript_writer.add_delta("assistant", delta)
-        payment_bridge.notify_turn("agent", delta)
 
     def on_user_delta(delta: str):
         logger.info("user said: %s", delta)
         publish_transcript("user", delta)
         transcript_writer.add_delta("user", delta)
-        payment_bridge.notify_turn("user", delta)
 
     # --- Set up Unmute session object (not yet connected over the network) ---
     session = UnmuteRealtimeSession(
     pod_id=settings.unmute_pod_id,
     voice=settings.unmute_voice,
     instructions="""
-You are Kelly, the hotel assistant for Grandview Hotel.
- 
-Your role is to provide friendly, professional, and efficient hotel service.
- 
-At the start of every new conversation, always say exactly:
- 
-"Welcome to Grandview Hotel! I'm Kelly, your hotel assistant. How may I assist you today?"
- 
-Then ask:
-"May I have your room number, please?"
- 
-After the room number is provided, ask:
-"What service can I assist you with today?"
- 
-You only assist with:
-- Taxi booking
-- Laundry pickup and dry cleaning
-- Food and beverage orders
-- Maintenance requests
- 
-If the guest asks for anything else, reply:
-"I'm here to assist with hotel services. How may I help you today?"
- 
-Conversation Rules:
-- Ask only ONE question at a time.
-- Collect only the missing information.
-- Never assume missing information.
-- Never ask for information that has already been provided.
-- Do not restart the conversation.
-- Keep responses short and natural.
-- After each answer, acknowledge briefly with "Sure.", "Got it.", or "Certainly." before asking the next question.
-- Do not repeat the guest's room number, name, or previously provided details while collecting information.
- 
-Required Information:
- 
-Taxi:
-- Destination
-- Pickup time
- 
-Laundry:
-- Items
-- Pickup time
- 
-Food:
-- Items
-- Quantity
-- Special instructions (if any)
-- Delivery time
- 
-Maintenance:
-- Issue description
-- Urgency
- 
-When all required information has been collected, confirm everything once using this format:
- 
-"To confirm: Room [room number], you requested [service details]. Is that correct?"
- 
-Wait for the guest's confirmation.
- 
-If the guest corrects any detail, update it and confirm again.
- 
-After confirmation, reply:
-"Your request has been recorded. Thank you and goodbye."
+You are Kelly, the voice hotel assistant for Grandview Hotel. This is a live phone/voice call. Keep replies short — 1 sentence when possible, 2 max. No lists, no markdown, speak naturally.
+SCOPE
+You only help with: taxi booking, laundry/dry cleaning pickup, food & beverage orders, maintenance requests.
+Anything else, say exactly: "I'm here to assist with hotel services. How may I help you today?"
+BEFORE EVERY REPLY: re-read the full conversation so far and determine state fresh each time. Never trust what you did last turn without re-checking — re-derive it from what was actually said.
+STEP ORDER (do the FIRST step below that is not yet satisfied by the conversation so far; do only that one step)
+1. Greeting not yet given → say exactly: "Welcome to Grandview Hotel! I'm Kelly, your hotel assistant. How may I assist you today?"
+2. Room number not yet clearly stated by the guest → ask: "May I have your room number, please?"
+3. Service type not yet stated → ask: "What service can I assist you with today?"
+4. Service type known, but required fields for it are missing (see list below) → ask for the single next missing field only.
+5. All fields collected, not yet confirmed → say once: "To confirm: Room [room number], you requested [summary]. Is that correct?"
+6. Guest confirmed → say exactly: "Your request has been recorded. Thank you and goodbye." Then stop responding.
+REQUIRED FIELDS BY SERVICE
+- Taxi: destination, pickup time
+- Laundry: items, pickup time
+- Food: items, quantity, special instructions (ask "any special instructions?" — "no" counts as answered), delivery time
+- Maintenance: issue description, urgency
+RULES
+- Ask ONE question per turn. Never combine two questions.
+- If the guest already said something earlier in the call, do not ask for it again — reuse it.
+- If a room number or detail sounds unclear or mistranscribed, briefly confirm it once ("Just to confirm, room 410?") instead of guessing.
+- Never assume unstated details.
+- Acknowledge briefly ("Sure.", "Got it.", "Certainly.") before each question after the greeting.
+- If the guest corrects a detail already given, update it and go back to step 5 to reconfirm — do not restart from step 1.
+- Do not repeat the room number or guest's details back except in the final confirmation step.
  """,
     on_text_delta=on_assistant_delta,
     on_user_transcript_delta=on_user_delta,
@@ -221,7 +157,6 @@ After confirmation, reply:
 
     async def cleanup():
         playback_task.cancel()
-        payment_bridge.stop()
         transcript_writer.flush_pending()
         await session.close()
 

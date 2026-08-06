@@ -29,6 +29,7 @@ from ..config import settings
 from . import hubspot_client
 from .extractor import extract_from_file
 from .validator import validate
+from ..payments.billing_service import create_bill_from_crm_data
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("crm.worker")
@@ -87,14 +88,14 @@ def process_file(transcript_path: Path) -> None:
     logger.info("Processing: %s", transcript_path)
 
     try:
-        logger.info("[1/4] Extracting from transcript...")
+        logger.info("[1/5] Extracting from transcript...")
         data = extract_from_file(str(transcript_path))
         logger.info(
             "Room: %s | Service: %s | Urgency: %s",
             data.get("room_number"), data.get("service_type"), data.get("urgency"),
         )
 
-        logger.info("[2/4] Validating...")
+        logger.info("[2/5] Validating...")
         is_valid, errors = validate(data)
         if not is_valid:
             logger.warning("Validation failed: %s", errors)
@@ -102,13 +103,27 @@ def process_file(transcript_path: Path) -> None:
             return
         logger.info("Validation passed")
 
-        logger.info("[3/4] Pushing to HubSpot...")
+        logger.info("[3/5] Pushing to HubSpot...")
         record = hubspot_client.push(data)
         logger.info("HubSpot record created. ID: %s", record.get("id"))
 
         save_dashboard_copy({**data, "hubspot_record_id": record.get("id")})
 
-        logger.info("[4/4] Logging transcript to HubSpot...")
+        logger.info("[4/5] Creating PayU bill from CRM data...")
+        bill_result = create_bill_from_crm_data(data)
+        if bill_result:
+            logger.info(
+                "Bill created from CRM data: order=%s total=Rs%.2f link=%s",
+                bill_result["order_id"], bill_result["total"], bill_result["payment_link"],
+            )
+        else:
+            logger.info(
+                "No bill created for this record (not a billable service_type, "
+                "missing room number/items, or no catalog price match — see "
+                "billing_service.py logs above for the exact reason)"
+            )
+
+        logger.info("[5/5] Logging transcript to HubSpot...")
         hubspot_client.push_transcript_log(data, str(transcript_path))
 
         shutil.move(str(transcript_path), PROCESSED_DIR / transcript_path.name)

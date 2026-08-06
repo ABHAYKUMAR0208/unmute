@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 
 import requests
 
@@ -40,6 +41,8 @@ logger = logging.getLogger("notifications.sms")
 
 MSG91_AUTH_KEY = os.getenv("MSG91_AUTH_KEY", "")
 MSG91_FLOW_URL = "https://control.msg91.com/api/v5/flow/"
+MSG91_OTP_URL = "https://control.msg91.com/api/v5/otp"
+MSG91_TEMPLATE_ID_GUEST = os.getenv("MSG91_TEMPLATE_ID_GUEST", "")
 
 
 def _normalize_phone(phone: str) -> str:
@@ -93,4 +96,49 @@ def send_sms(phone: str, variables: dict[str, str], template_id: str | None = No
         return False
     except Exception:
         logger.exception("MSG91 Flow API request failed")
+        return False
+
+
+def send_payment_ready_otp_style(phone: str, order_code: str) -> bool:
+    """
+    Interim fallback while there's no DLT-approved Flow template for
+    payment links yet — mirrors taxi_worker.py's send_confirmation_sms()
+    exactly (same MSG91 OTP API, same MSG91_TEMPLATE_ID_GUEST template).
+
+    HARD CEILING, not a bug: MSG91's OTP API (/api/v5/otp) only accepts a
+    numeric code in the "otp" field. Carriers only pass DLT-approved
+    OTP-category templates through with numeric-only content — you cannot
+    put a URL or free text in there.
+
+    So this function CANNOT deliver the actual payment link by SMS. It
+    sends `order_code` (pass the last 6 digits of the order_id) as if it
+    were an OTP, so the guest gets a real, deliverable SMS confirming a
+    bill exists, with a code they can reference — while you wait for a
+    proper payment-link template to get DLT approval.
+    """
+    if not MSG91_AUTH_KEY or not MSG91_TEMPLATE_ID_GUEST:
+        logger.warning("MSG91_AUTH_KEY or MSG91_TEMPLATE_ID_GUEST not set — skipping OTP-style SMS")
+        return False
+    if not phone:
+        logger.warning("No phone number provided — skipping OTP-style SMS")
+        return False
+
+    mobile = _normalize_phone(phone)
+    code = "".join(ch for ch in order_code if ch.isdigit())[-6:] or str(random.randint(100000, 999999))
+
+    url = f"{MSG91_OTP_URL}?template_id={MSG91_TEMPLATE_ID_GUEST}&mobile=91{mobile}&authkey={MSG91_AUTH_KEY}"
+    headers = {"content-type": "application/json", "Content-Type": "application/JSON"}
+    payload = {"otp": code}
+
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=10)
+        data = r.json()
+        logger.info("MSG91 OTP-style response: %s", data)
+        if data.get("type") == "success":
+            logger.info("Payment-ready OTP-style SMS sent -> %s | code=%s", mobile, code)
+            return True
+        logger.error("MSG91 OTP-style error: %s", data)
+        return False
+    except Exception:
+        logger.exception("MSG91 OTP-style SMS request failed")
         return False
