@@ -29,7 +29,7 @@ from .bill_generator import BillGenerator
 from .config import PayuWorkerSettings
 from .models import BillItem, ServiceRequest, ServiceType
 from .payu_client import PayUClient
-from .service_catalog import lookup_price
+from .service_catalog import lookup_price_with_addons
 from ..notifications.email import send_email
 from ..notifications.sms import send_sms, send_payment_ready_otp_style
 from ..taxi.hubspot_client import fetch_guest as fetch_guest_from_hubspot
@@ -111,14 +111,15 @@ def create_bill_from_crm_data(data: dict) -> Optional[dict]:
             qty = int(it.get("quantity") or 1)
         except (TypeError, ValueError):
             qty = 1
-        price = lookup_price(payments_service_type, name)
-        if price is None:
+        resolved = lookup_price_with_addons(payments_service_type, name)
+        if resolved is None:
             logger.warning(
                 "No catalog price for item %r (service=%s) — skipping this item, "
                 "not billing a guessed price", name, service_type_str,
             )
             continue
-        bill_items.append(BillItem(name=name, quantity=qty, unit_price=price))
+        display_name, price = resolved
+        bill_items.append(BillItem(name=display_name, quantity=qty, unit_price=price))
 
     if not bill_items:
         logger.warning("Skipping billing for room %s — no priceable items after catalog lookup", room_number)
