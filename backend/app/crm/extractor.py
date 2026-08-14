@@ -2,24 +2,31 @@
 extractor.py
 ------------
 Reads a hotel call transcript (.jsonl, one turn per line) and uses a local
-LLM (Phi-3 Mini via Ollama) to extract a structured service-request JSON.
+LLM (Phi-3 Mini via Ollama) to extract structured service-request JSON —
+one object per distinct service the guest requested in the call.
 
-Ported from Personaplex's src/extraction/extractor.py ("Pipeline B" — the
-pipeline that actually feeds HubSpot). Extraction logic/prompt is
-unchanged; the transcript-parsing layer was rewritten to match this
-project's actual TranscriptWriter output format, which differs from
-Personaplex's:
+Originally ported from Personaplex's src/extraction/extractor.py
+("Pipeline B"). Multi-service extraction (a transcript can produce more
+than one service request — e.g. food + taxi in one call) is ported from
+a later Personaplex revision that rewrote extraction to return a JSON
+array instead of a single object. Two things were deliberately NOT
+carried over from that version:
 
-    Personaplex line:  {"session_id": ..., "room": ..., "role": "agent"|"guest", "text": ...}
-    This project's line: {"room": ...,               "role": "assistant"|"user", "text": ..., "ts": <unix float>}
+  - It disabled Ollama's format=json mode in favor of regex-extracting a
+    JSON array from free-form output. We keep format=json — arrays are
+    valid top-level JSON, no reason to give up the stricter guarantee.
+  - It built its own hardcoded MENU price dicts and pushed a separate
+    combined "payment" HubSpot record. Unmute already has a real billing
+    pipeline (app/payments/billing_service.py) with its own catalog and
+    PayU integration, called once per validated service from
+    app/crm/worker.py — so pricing has one source of truth instead of two.
 
-Notably there is no session_id field here — TranscriptWriter identifies a
-call purely by `room` (already a fresh uuid4-derived name minted per
-session in main.py's /token endpoint, so it plays the same "unique per
-call" role session_id played in Personaplex). Per product decision, we
-still populate a `session_id` field on the extracted record so downstream
-HubSpot properties/dashboard keep that name — its value is just the room
-name.
+Determinism (temperature=0, fixed seed) and the multi-item few-shot
+example were added separately to fix small-model unreliability on
+multi-item extraction (see git history) — both are kept here.
+
+Transcript line shape (this project's TranscriptWriter format):
+    {"room": "...", "role": "assistant"|"user", "text": "...", "ts": 1785480387.75}
 """
 
 from __future__ import annotations
@@ -34,14 +41,15 @@ from ..config import settings
 
 logger = logging.getLogger("crm.extractor")
 
-SYSTEM_PROMPT = """You are a hotel operations assistant. Read the call transcript and extract the service request into a structured JSON object.
+SYSTEM_PROMPT = """You are a hotel operations assistant. Read the call transcript and extract ALL service requests the guest made into a JSON array — one object per DISTINCT service.
 
-Always return ONLY a valid JSON object — no explanation, no markdown, no code fences.
-IMPORTANT: Always include ALL fields in your response, even if the value is "pending" or "normal". Never omit any field.
+Always return ONLY a valid JSON array — no explanation, no markdown, no code fences.
+Even if there is only one service requested, still return an array with exactly one object in it. Never return a single bare object.
+IMPORTANT: Always include ALL fields for each object, even if the value is "pending" or "normal". Never omit any field.
 
-First identify the service_type from: taxi, laundry, food_order, maintenance
+For EACH service, first identify its service_type from: taxi, laundry, food_order, maintenance
 
-Then return the matching structure:
+Then build that service's object using the matching structure:
 
 If taxi:
 {
@@ -85,22 +93,68 @@ If maintenance:
   "status": "pending"
 }
 
-IMPORTANT: Always include ALL fields in your response, even if the value is "pending" or "normal". Never omit any field.
+IMPORTANT: Always include ALL fields in every object, even if the value is "pending" or "normal". Never omit any field.
 
 Always set status to "pending".
 urgency is "urgent" if guest expressed urgency or discomfort, otherwise "normal".
 
-CRITICAL — multiple items: guests often order more than one distinct item in a single request. The "items" array must contain ONE ENTRY PER DISTINCT ITEM mentioned, each with its own correct quantity. Never collapse multiple items into one entry, and never drop items after the first one. Example — transcript:  Guest: I'd like to order 2 burgers and 3 pizzas to room 305.  Agent: Got it, 2 burgers and 3 pizzas to room 305. Anything else?   Guest: No that's all. Correct extraction (note: two separate entries, correct quantities each):{"service_type": "food_order","room_number": "305","items": [{"name": "burger", "quantity": 2},{"name": "pizza", "quantity": 3}],"delivery_deadline": null,"special_notes": null,"urgency": "normal","status": "pending"} WRONG (do not do this — missing the second item):{"service_type": "food_order", "room_number": "305", "items": [{"name": "burger", "quantity": 2}], ...} WRONG (do not do this — quantities merged/confused):{"service_type": "food_order", "room_number": "305", "items": [{"name": "burger and pizza", "quantity": 5}], ...} Apply this same one-entry-per-distinct-item rule to "laundry" items too.
+CRITICAL — multiple distinct services: if the guest asked for more than one
+kind of service in the same call (e.g. food AND a taxi), the array must
+contain one object per DISTINCT service, each following its own schema
+above. Never merge two different services into one object.
 
+CRITICAL — multiple items within one service: for laundry/food_order, the
+"items" array must contain ONE ENTRY PER DISTINCT ITEM mentioned, each
+with its own correct quantity. Never collapse multiple items into one
+entry, and never drop items after the first one.
+
+Example — transcript:
+  Guest: I'd like to order 2 burgers and 3 pizzas to room 305.
+  Agent: Got it, 2 burgers and 3 pizzas to room 305. Anything else?
+  Guest: Yes, also book me a taxi to the airport for 6pm.
+  Agent: Sure, taxi to the airport at 6pm for room 305. Anything else?
+  Guest: No that's all.
+
+Correct extraction (note: TWO objects — one food_order with TWO item
+entries, one taxi — not merged, nothing dropped):
+[
+  {
+    "service_type": "food_order",
+    "room_number": "305",
+    "items": [
+      {"name": "burger", "quantity": 2},
+      {"name": "pizza", "quantity": 3}
+    ],
+    "delivery_deadline": null,
+    "special_notes": null,
+    "urgency": "normal",
+    "status": "pending"
+  },
+  {
+    "service_type": "taxi",
+    "room_number": "305",
+    "destination": "airport",
+    "pickup_time": "6pm",
+    "status": "pending"
+  }
+]
+
+WRONG (do not do this — missing the taxi service entirely):
+[{"service_type": "food_order", "room_number": "305", "items": [{"name": "burger", "quantity": 2}, {"name": "pizza", "quantity": 3}], ...}]
+
+WRONG (do not do this — services merged into one object):
+[{"service_type": "food_order", "room_number": "305", "items": [...], "destination": "airport", "pickup_time": "6pm", ...}]
+
+WRONG (do not do this — bare object instead of an array):
+{"service_type": "taxi", "room_number": "305", ...}
 """
 
 
 def parse_jsonl_transcript(raw: str) -> tuple[str, dict]:
     """
     Turns raw .jsonl content (this project's TranscriptWriter format) into
-    a plain-text transcript + call metadata.
-
-    Real line shape: {"room": "...", "role": "assistant"|"user", "text": "...", "ts": 1785480387.75}
+    a plain-text transcript + call metadata shared by every service
+    extracted from it.
     """
     lines = []
     room_name: str | None = None
@@ -140,19 +194,24 @@ def parse_jsonl_transcript(raw: str) -> tuple[str, dict]:
     return "\n".join(lines), metadata
 
 
-def extract(transcript: str, metadata: dict | None = None) -> dict:
-    """Sends transcript to Phi-3 Mini via Ollama, returns structured dict."""
+def extract(transcript: str, metadata: dict | None = None) -> list[dict]:
+    """
+    Sends transcript to Phi-3 Mini via Ollama, returns a list of
+    structured service-request dicts (one per distinct service).
+    """
     payload = {
-        "model": "qwen2.5:14b",
+        "model": "phi3:mini",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": transcript},
         ],
         "stream": False,
-        "format": "json",  # forces Ollama to return valid JSON
-        "options": {"temperature": 0,   # deterministic — this is extraction, not creative generation
-                    "seed": 42,         # same input -> same output, every run
-                    "top_p": 1.0},
+        "format": "json",  # forces Ollama to return syntactically valid JSON
+        "options": {
+            "temperature": 0,   # deterministic — this is extraction, not creative generation
+            "seed": 42,         # same input -> same output, every run
+            "top_p": 1.0,
+        },
     }
 
     logger.debug("Calling Ollama at %s", settings.ollama_url)
@@ -170,21 +229,36 @@ def extract(transcript: str, metadata: dict | None = None) -> dict:
             raw_response = raw_response[4:]
         raw_response = raw_response.strip()
 
-    extracted = json.loads(raw_response)
+    parsed = json.loads(raw_response)
 
-    # Defaults for fields Phi-3 Mini sometimes omits
-    extracted.setdefault("status", "pending")
-    extracted.setdefault("urgency", "normal")
+    # Defensive: despite explicit instructions, a small model can still
+    # occasionally return a bare object instead of a one-item array.
+    # Normalize rather than crash the whole transcript over this.
+    if isinstance(parsed, dict):
+        logger.warning(
+            "Model returned a single object instead of an array — wrapping it. "
+            "This shouldn't normally happen; worth a look if it's frequent."
+        )
+        services = [parsed]
+    elif isinstance(parsed, list):
+        services = parsed
+    else:
+        raise ValueError(f"Unexpected extraction result type: {type(parsed)}")
 
-    if metadata:
-        extracted["session_id"] = metadata.get("session_id")  # = room value
-        extracted["room_name"] = metadata.get("room")
-        extracted["timestamp"] = metadata.get("timestamp")
+    for service in services:
+        # Defaults for fields Phi-3 Mini sometimes omits
+        service.setdefault("status", "pending")
+        service.setdefault("urgency", "normal")
 
-    return extracted
+        if metadata:
+            service["session_id"] = metadata.get("session_id")  # = room value
+            service["room_name"] = metadata.get("room")
+            service["timestamp"] = metadata.get("timestamp")
+
+    return services
 
 
-def extract_from_file(filepath: str) -> dict:
+def extract_from_file(filepath: str) -> list[dict]:
     with open(filepath, "r", encoding="utf-8") as f:
         raw = f.read()
 

@@ -66,3 +66,15 @@ def validate(data: dict) -> tuple[bool, list[str]]:
     if service_type not in VALID_SERVICE_TYPES:
         return False, [f"Invalid service_type: '{service_type}'"]
     return _VALIDATORS[service_type](data)
+
+
+def validate_all(services: list[dict]) -> list[tuple[dict, bool, list[str]]]:
+    """
+    Validates each service in a multi-service extraction independently.
+    Returns one (service, is_valid, errors) tuple per service, so the
+    caller can push whichever services are valid and skip/log whichever
+    aren't — one malformed service (e.g. a taxi request missing a
+    destination) shouldn't block a correctly-extracted food order in the
+    same call from reaching HubSpot.
+    """
+    return [(service, *validate(service)) for service in services]
