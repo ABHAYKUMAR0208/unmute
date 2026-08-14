@@ -36,6 +36,7 @@ import logging
 from datetime import datetime, timezone
 
 import requests
+import re
 
 from ..config import settings
 
@@ -147,6 +148,27 @@ WRONG (do not do this — services merged into one object):
 
 WRONG (do not do this — bare object instead of an array):
 {"service_type": "taxi", "room_number": "305", ...}
+ 
+Example — a transcript with only ONE service still gets wrapped in an array:
+  Guest: I'd like 2 towels sent up to room 412, please.
+  Agent: Sure, 2 towels to room 412 right away.
+ 
+Correct extraction (note: still an array, with exactly one object in it):
+[
+  {
+    "service_type": "laundry",
+    "room_number": "412",
+    "items": [{"name": "towel", "quantity": 2}],
+    "pickup_time": null,
+    "delivery_deadline": null,
+    "special_notes": null,
+    "urgency": "normal",
+    "status": "pending"
+  }
+]
+ 
+WRONG for the single-service case too (never drop the array just because there's one item):
+{"service_type": "laundry", "room_number": "412", "items": [{"name": "towel", "quantity": 2}], ...}
 """
 
 
@@ -200,13 +222,13 @@ def extract(transcript: str, metadata: dict | None = None) -> list[dict]:
     structured service-request dicts (one per distinct service).
     """
     payload = {
-        "model": "phi3:mini",
+        "model": "qwen2.5:14b",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": transcript},
         ],
         "stream": False,
-        "format": "json",  # forces Ollama to return syntactically valid JSON
+        # "format": "json",  # forces Ollama to return syntactically valid JSON
         "options": {
             "temperature": 0,   # deterministic — this is extraction, not creative generation
             "seed": 42,         # same input -> same output, every run
@@ -221,15 +243,25 @@ def extract(transcript: str, metadata: dict | None = None) -> list[dict]:
         raise ConnectionError(f"Ollama API {response.status_code}: {response.text}")
 
     raw_response = response.json()["message"]["content"].strip()
-
+ 
     # Strip markdown fences if present
     if raw_response.startswith("```"):
         raw_response = raw_response.strip("`")
         if raw_response.startswith("json"):
             raw_response = raw_response[4:]
         raw_response = raw_response.strip()
-
-    parsed = json.loads(raw_response)
+ 
+    # Without format=json's grammar constraint, the model may wrap its
+    # answer in prose despite instructions not to. Prefer an array match
+    # (the documented correct shape); fall back to a bare object.
+    match = re.search(r"\[.*\]", raw_response, re.DOTALL)
+    if match:
+        parsed = json.loads(match.group(0))
+    else:
+        match = re.search(r"\{.*\}", raw_response, re.DOTALL)
+        if not match:
+            raise ValueError(f"No JSON found in response: {raw_response}")
+        parsed = json.loads(match.group(0))
 
     # Defensive: despite explicit instructions, a small model can still
     # occasionally return a bare object instead of a one-item array.
