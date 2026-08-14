@@ -1,12 +1,4 @@
-import BarRing from "./BarRing";
-
-const GLOW = {
-  idle: "radial-gradient(560px 420px at 50% 8%, rgba(255,90,54,0.10), transparent 70%)",
-  connecting: "radial-gradient(560px 420px at 50% 8%, rgba(255,178,56,0.14), transparent 70%)",
-  connected: "radial-gradient(560px 420px at 50% 8%, rgba(255,59,110,0.12), transparent 70%)",
-  "agent-speaking": "radial-gradient(560px 420px at 50% 8%, rgba(124,140,255,0.16), transparent 70%)",
-  error: "radial-gradient(560px 420px at 50% 8%, rgba(255,59,110,0.10), transparent 70%)",
-};
+import VoiceCore from "./VoiceCore";
 
 function pad(n) {
   return String(n).padStart(2, "0");
@@ -72,6 +64,7 @@ export default function CallConsole({
   userLevel,
   agentLevel,
   agentSpeaking,
+  userSpeaking,
   connect,
   disconnect,
   toggleMic,
@@ -81,8 +74,19 @@ export default function CallConsole({
   const isConnecting = callState === "connecting";
   const isError = callState === "error";
 
-  const uiState = agentSpeaking ? "agent-speaking" : callState;
-  const tone = agentSpeaking ? "agent" : isLive ? "you" : "idle";
+  const uiState = isError
+    ? "error"
+    : isConnecting
+    ? "connecting"
+    : agentSpeaking
+    ? "agent-speaking"
+    : userSpeaking
+    ? "user-speaking"
+    : isLive
+    ? "connected"
+    : "idle";
+
+  const activeLevel = agentSpeaking ? agentLevel : userSpeaking ? userLevel : 0;
 
   function handleCallClick() {
     if (isLive) {
@@ -101,11 +105,7 @@ export default function CallConsole({
   return (
     <>
       {/* Ambient glow — colour shifts with call state */}
-      <div
-        className="console-main__glow"
-        aria-hidden="true"
-        style={{ background: GLOW[uiState] ?? GLOW.idle }}
-      />
+      <div className="console-main__glow" aria-hidden="true" data-state={uiState} />
 
       {/* Status pill */}
       <div className="status-pill" data-state={uiState} role="status" aria-live="polite">
@@ -116,6 +116,7 @@ export default function CallConsole({
             connecting: "Connecting…",
             connected: "Live",
             "agent-speaking": "Agent speaking",
+            "user-speaking": "You're speaking",
             error: "Connection error",
           }[uiState] ?? uiState}
         </span>
@@ -123,19 +124,24 @@ export default function CallConsole({
 
       {/* Call console */}
       <section className="call-console" aria-label="Call console">
-        <div
-          className="call-stage"
-          data-active={isLive || isConnecting ? "true" : "false"}
-          data-tone={tone}
-        >
-          <div className="call-stage__ring call-stage__ring--outer" />
-          <div className="call-stage__ring call-stage__ring--pulse" />
+        <VoiceCore state={uiState} isLive={isLive} micMuted={micMuted} level={activeLevel} />
 
-          <BarRing
-            level={agentSpeaking ? agentLevel : userLevel}
-            active={isLive}
-            tone={tone}
-          />
+        <div className={`call-timer${isLive ? " is-live" : ""}`}>
+          {formatDuration(seconds)}
+        </div>
+
+        <div className="call-controls">
+          <button
+            className="mute-toggle"
+            data-muted={micMuted ? "true" : "false"}
+            onClick={toggleMic}
+            disabled={!isLive}
+            aria-pressed={micMuted}
+            aria-label={micMuted ? "Unmute microphone" : "Mute microphone"}
+          >
+            {micMuted ? <MicOffIcon /> : <MicOnIcon />}
+            {micMuted ? "Unmute" : "Mute"}
+          </button>
 
           <button
             className="call-button"
@@ -147,22 +153,6 @@ export default function CallConsole({
             {isError ? <ErrorIcon /> : isLive ? <HangupIcon /> : <PhoneIcon />}
           </button>
         </div>
-
-        <div className={`call-timer${isLive ? " is-live" : ""}`}>
-          {formatDuration(seconds)}
-        </div>
-
-        <button
-          className="mute-toggle"
-          data-muted={micMuted ? "true" : "false"}
-          onClick={toggleMic}
-          disabled={!isLive}
-          aria-pressed={micMuted}
-          aria-label={micMuted ? "Unmute microphone" : "Mute microphone"}
-        >
-          {micMuted ? <MicOffIcon /> : <MicOnIcon />}
-          {micMuted ? "Unmute" : "Mute"}
-        </button>
 
         {isIdle && (
           <p className="call-help">

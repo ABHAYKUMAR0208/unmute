@@ -1,8 +1,10 @@
 import { useVoiceAgent } from "../hooks/useVoiceAgent";
 import Nav from "../components/Nav";
 import CallConsole from "../components/CallConsole";
+import MenuPanel from "../components/MenuPanel";
 import TranscriptPanel from "../components/TranscriptPanel";
 import Footer from "../components/Footer";
+import "./Console.css";
 
 export default function Console() {
   const {
@@ -13,6 +15,7 @@ export default function Console() {
     userLevel,
     agentLevel,
     agentSpeaking,
+    userSpeaking,
     transcript,
     connect,
     disconnect,
@@ -31,10 +34,12 @@ export default function Console() {
           userLevel={userLevel}
           agentLevel={agentLevel}
           agentSpeaking={agentSpeaking}
+          userSpeaking={userSpeaking}
           connect={connect}
           disconnect={disconnect}
           toggleMic={toggleMic}
         />
+        <MenuPanel />
         <TranscriptPanel transcript={transcript} callState={callState} />
       </main>
       <Footer variant="light" />

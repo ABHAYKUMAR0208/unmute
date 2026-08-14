@@ -46,24 +46,40 @@ def _ensure_dirs() -> None:
         d.mkdir(parents=True, exist_ok=True)
 
 
-def get_next_file() -> Path | None:
-    """Returns the first .jsonl file found in unprocessed/, or None."""
-    files = sorted(p for p in UNPROCESSED_DIR.glob("*.jsonl"))
-    return files[0] if files else None
-
-
-def wait_for_call_to_end(path: Path) -> None:
+def _done_path(jsonl_path: Path) -> Path:
+    return jsonl_path.with_suffix(".done")
+ 
+ 
+def get_next_ready_file() -> tuple[Path, bool] | None:
     """
-    Polls the file's last-modified time. Returns once the file has not
-    been modified for crm_quiet_period seconds (i.e. the call is over).
+    Returns (path, is_fallback) for the first .jsonl file that's ready to
+    process, or None if nothing's ready yet.
+ 
+    Primary signal: a matching <room>.done sentinel exists — written by
+    TranscriptWriter.mark_complete() once the LiveKit job actually ends.
+    This is the reliable path; no guessing from file-quiet timing.
+ 
+    Fallback: if a .jsonl has been sitting untouched for much longer than
+    any real call would take (crm_stale_after_seconds) with no .done file
+    ever appearing, we process it anyway. This exists for the case where
+    the agent process crashes/gets killed before its shutdown callback can
+    run — without this, such a transcript would be stuck in unprocessed/
+    forever, silently never processed. is_fallback=True is returned so the
+    caller can log this distinctly; it should be rare, and worth
+    investigating if it isn't.
     """
-    logger.info("Monitoring %s for inactivity (%ss quiet period)...", path, settings.crm_quiet_period)
-    while True:
-        last_modified = path.stat().st_mtime
-        time.sleep(settings.crm_quiet_period)
-        if path.stat().st_mtime == last_modified:
-            logger.info("File has been quiet. Assuming call has ended.")
-            return
+    candidates = sorted(UNPROCESSED_DIR.glob("*.jsonl"))
+ 
+    for path in candidates:
+        if _done_path(path).exists():
+            return path, False
+ 
+    for path in candidates:
+        age = time.time() - path.stat().st_mtime
+        if age >= settings.crm_stale_after_seconds:
+            return path, True
+ 
+    return None
 
 
 def save_dashboard_copy(data: dict) -> Path:
@@ -83,9 +99,23 @@ def save_dashboard_copy(data: dict) -> Path:
     logger.info("Dashboard copy saved -> %s", out_path)
     return out_path
 
+def _move_with_sentinel(transcript_path: Path, dest_dir: Path) -> None:
+    """Moves the .jsonl and, if present, its .done sentinel alongside it."""
+    shutil.move(str(transcript_path), dest_dir / transcript_path.name)
+    done_path = _done_path(transcript_path)
+    if done_path.exists():
+        shutil.move(str(done_path), dest_dir / done_path.name)
 
-def process_file(transcript_path: Path) -> None:
-    logger.info("Processing: %s", transcript_path)
+
+def process_file(transcript_path: Path, is_fallback: bool = False) -> None:
+    logger.info("Processing: %s%s", transcript_path, " [FALLBACK — no .done sentinel found]" if is_fallback else "")
+    if is_fallback:
+        logger.warning(
+            "Processing %s via stale-file fallback, not its completion sentinel. "
+            "This usually means the agent process didn't shut down cleanly for this "
+            "call — worth checking agent-worker logs around this time.",
+            transcript_path.name,
+        )
 
     try:
         logger.info("[1/5] Extracting from transcript...")
@@ -99,7 +129,7 @@ def process_file(transcript_path: Path) -> None:
         is_valid, errors = validate(data)
         if not is_valid:
             logger.warning("Validation failed: %s", errors)
-            shutil.move(str(transcript_path), FAILED_DIR / transcript_path.name)
+            _move_with_sentinel(transcript_path, FAILED_DIR)
             return
         logger.info("Validation passed")
 
@@ -126,12 +156,12 @@ def process_file(transcript_path: Path) -> None:
         logger.info("[5/5] Logging transcript to HubSpot...")
         hubspot_client.push_transcript_log(data, str(transcript_path))
 
-        shutil.move(str(transcript_path), PROCESSED_DIR / transcript_path.name)
+        _move_with_sentinel(transcript_path, PROCESSED_DIR)
         logger.info("Moved to processed/")
 
     except Exception as exc:
         logger.error("Error processing %s: %s", transcript_path, exc, exc_info=True)
-        shutil.move(str(transcript_path), FAILED_DIR / transcript_path.name)
+        _move_with_sentinel(transcript_path, FAILED_DIR)
         logger.info("Moved to failed/")
 
 
@@ -139,12 +169,11 @@ def run_forever() -> None:
     _ensure_dirs()
     logger.info("CRM worker started. Watching %s", UNPROCESSED_DIR)
     while True:
-        path = get_next_file()
-        if path:
-            logger.info("New file found: %s", path)
-            wait_for_call_to_end(path)
-            if path.exists():
-                process_file(path)
+        result = get_next_ready_file()
+        if result:
+            path, is_fallback = result
+            logger.info("Ready to process: %s", path)
+            process_file(path, is_fallback=is_fallback)
         else:
             time.sleep(settings.crm_poll_interval)
 

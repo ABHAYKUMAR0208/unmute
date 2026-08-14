@@ -1,0 +1,255 @@
+/* ============================================================
+   SOLUTIONS — extra animation layer
+   Smooth loader, particle field, floating orbs, 3D tilt +
+   spotlight on use-case cards, animated pipeline progress line,
+   and small hover/glow polish on top of the existing page.
+   Mirrors the vocabulary already used on Home.jsx / Walkthrough.jsx
+   so the whole app feels like one system.
+   ============================================================ */
+
+/* ---- Smooth page loader ---- */
+.page-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--ink, #f9f9f9);
+}
+
+.page-loader__mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--coral, #ff5a36), #14141a);
+  box-shadow: 0 12px 30px -10px rgba(255, 90, 54, 0.5);
+}
+
+.page-loader__mark svg {
+  width: 26px;
+  height: 26px;
+  stroke: #ffffff;
+}
+
+.page-loader__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 20px;
+}
+
+.page-loader__bars span {
+  width: 4px;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--coral, #ff5a36);
+  animation: sol-loader-bar 0.9s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+@keyframes sol-loader-bar {
+  0%, 100% { transform: scaleY(0.3); opacity: 0.55; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.page-loader__label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loader__bars span { animation: none; transform: scaleY(0.7); }
+}
+
+/* ---- Ambient particle layer inside the hero ---- */
+.solutions-hero__particles {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.solutions-hero__particles .particle-field {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- Floating gradient orbs (idle drift, layered under the grid) ---- */
+.solutions-hero__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.55;
+  animation: sol-orb-float 9s ease-in-out infinite;
+}
+
+.solutions-hero__orb--a {
+  width: 220px;
+  height: 220px;
+  top: -30px;
+  left: 8%;
+  background: radial-gradient(circle, rgba(124, 140, 255, 0.55), transparent 70%);
+}
+
+.solutions-hero__orb--b {
+  width: 190px;
+  height: 190px;
+  top: 60px;
+  right: 10%;
+  background: radial-gradient(circle, rgba(255, 90, 54, 0.5), transparent 70%);
+  animation-delay: -3.2s;
+}
+
+@keyframes sol-orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(14px, -22px) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solutions-hero__orb { animation: none; }
+}
+
+/* ---- Use-case cards: 3D tilt + cursor spotlight ---- */
+.use-cases__grid {
+  perspective: 1200px;
+}
+
+.use-case {
+  position: relative;
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.use-case > *:not(.use-case__spotlight) {
+  position: relative;
+  z-index: 1;
+}
+
+.use-case__spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.use-case:hover .use-case__spotlight {
+  opacity: 1;
+}
+
+.use-case__icon {
+  transition: transform 0.45s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.35s ease;
+}
+
+.use-case:hover .use-case__icon {
+  transform: translateZ(24px) scale(1.12) rotate(-6deg);
+}
+
+.use-case h3,
+.use-case p {
+  transition: transform 0.45s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.use-case:hover h3 {
+  transform: translateZ(14px);
+}
+
+.use-case__tag {
+  transition: transform 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.use-case:hover .use-case__tag {
+  transform: translateZ(10px) translateX(2px);
+  border-color: var(--border-strong);
+}
+
+/* ---- Pipeline: animated fill line + hover lift ---- */
+.pipeline-steps {
+  position: relative;
+}
+
+.pipeline-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 3;
+  background: linear-gradient(to right, var(--violet, #6337de), var(--teal, #2fe6b8), var(--coral, #ff5a36));
+  transform-origin: left center;
+}
+
+.pipeline-step {
+  transition: background 0.35s ease, box-shadow 0.35s ease;
+}
+
+.pipeline-step:hover {
+  background: var(--panel-raised);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.pipeline-step__num {
+  transition: color 0.3s ease, transform 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  display: inline-block;
+}
+
+.pipeline-step:hover .pipeline-step__num {
+  color: var(--coral, #ff5a36);
+  transform: scale(1.12);
+}
+
+.pipeline-step__badge {
+  transition: transform 0.3s ease, border-color 0.3s ease;
+}
+
+.pipeline-step:hover .pipeline-step__badge {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+}
+
+/* ---- CTA banner: particles + floating orb ---- */
+.solutions-cta__particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.solutions-cta__orb {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  top: -60px;
+  right: 4%;
+  background: radial-gradient(circle, rgba(255, 90, 54, 0.35), transparent 70%);
+  filter: blur(70px);
+  pointer-events: none;
+  z-index: 0;
+  animation: sol-orb-float 10s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solutions-cta__orb { animation: none; }
+  .use-case, .use-case__icon, .use-case h3 { transition: none; }
+}
+
+/* ---- Magnetic hover wrapper (positioning only) ---- */
+.magnetic-btn {
+  will-change: transform;
+}

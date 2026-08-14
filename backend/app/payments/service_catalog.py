@@ -40,7 +40,7 @@ FOOD_MENU = {
     "sandwich": 149.0,
     "club sandwich": 199.0,
     "grilled sandwich": 169.0,
-    "cold coffee": 149.0,
+    "cold coffee": 149.0,   
 
     # ── Indian — starters ────────────────────────────────────────────────
     "paneer tikka": 350.0,

@@ -1,0 +1,125 @@
+/* ============================================================
+   WALKTHROUGH — extra animation layer
+   Loader, particle field, 3D tilt perspective, magnetic hover,
+   and small hover/glow polish on top of the existing page.
+   ============================================================ */
+
+/* ---- Smooth page loader ---- */
+.page-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: var(--ink, #f9f9f9);
+}
+
+.page-loader__mark {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--coral, #6337de), #14141a);
+  box-shadow: 0 12px 30px -10px rgba(99, 55, 222, 0.5);
+}
+
+.page-loader__mark .material-symbols-outlined {
+  font-size: 26px;
+  color: #ffffff;
+}
+
+.page-loader__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 20px;
+}
+
+.page-loader__bars span {
+  width: 4px;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--coral, #6337de);
+  animation: loader-bar 0.9s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+@keyframes loader-bar {
+  0%, 100% { transform: scaleY(0.3); opacity: 0.55; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+
+.page-loader__label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-loader__bars span { animation: none; transform: scaleY(0.7); }
+}
+
+/* ---- Ambient particle layer inside the compact hero ---- */
+.hero-compact__particles {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.hero-compact__particles .particle-field {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- Magnetic hover wrapper ---- */
+.magnetic {
+  will-change: transform;
+}
+
+/* ---- 3D tilt perspective wrapper around the stage mockup ---- */
+.wt-stage-tilt {
+  perspective: 1400px;
+}
+
+.wt-stage-tilt .wt-stage {
+  transform-style: preserve-3d;
+}
+
+/* Give the call button a touch more presence on hover/idle pulse,
+   layered on top of the existing data-state driven styling. */
+.wt-call-btn {
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+
+.wt-stage-tilt:hover .wt-call-btn {
+  transform: scale(1.05) translateZ(20px);
+}
+
+/* Progress dots get a livelier hover without touching the
+   existing active-state color logic. */
+.wt-progress__dot {
+  transition: transform 0.25s var(--ease), border-color 0.25s var(--ease), color 0.25s var(--ease), background 0.25s var(--ease);
+}
+
+.wt-progress__dot:hover {
+  transform: scale(1.14);
+}
+
+/* Closing CTA card gets a soft lift shadow to pair with the
+   whileHover y-translate already applied via framer-motion. */
+.wt-cta__card {
+  transition: box-shadow 0.4s var(--ease);
+}
+
+.wt-cta__card:hover {
+  box-shadow: 0 24px 50px -24px rgba(0, 0, 0, 0.18);
+}

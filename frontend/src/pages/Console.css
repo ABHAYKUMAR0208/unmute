@@ -1,0 +1,6 @@
+/* This file previously styled the dual voice-orb ring visualizer, which
+   has been replaced by the single morphing VoiceCore blob (see
+   VoiceCore.jsx and the "VOICE CORE" block in src/index.css). Left in
+   place — and still imported by Console.jsx — in case you want to bring
+   back a per-orb ring treatment later; it currently has no matching
+   elements in the DOM so it has no visible effect. */

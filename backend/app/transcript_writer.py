@@ -8,6 +8,11 @@ Storage layout:
     unprocessed/<room_name>.jsonl   <- one JSON object per completed turn,
                                         crash-safe. This is the ONLY place
                                         JSON transcripts get written to.
+    unprocessed/<room_name>.done    <- written once, after the LiveKit job
+                                        actually ends (see mark_complete()).
+                                        Presence of this file is what tells
+                                        the CRM worker a transcript is ready
+                                        to process — not file-quiet timing.
                                         A downstream job is expected to pick
                                         these up and move them to processed/
                                         or failed/ once handled.
@@ -93,6 +98,21 @@ class TranscriptWriter:
     def flush_pending(self):
         """Call on session shutdown to make sure the last turn isn't lost."""
         self._flush_turn()
+ 
+    def mark_complete(self):
+        """
+        Call once, AFTER flush_pending(), when the LiveKit job has actually
+        ended (i.e. from the agent's shutdown callback). Writes a small
+        sentinel file next to the transcript so the CRM worker can detect
+        "this call is truly over" directly, instead of guessing from file
+        modification timing — see app/crm/worker.py for the consumer side.
+ 
+        Order matters: this must be called after flush_pending(), so the
+        sentinel never appears before the last turn is actually on disk.
+        """
+        done_path = UNPROCESSED_DIR / f"{self.room_name}.done"
+        done_path.write_text(str(time.time()), encoding="utf-8")
+        logger.info("Marked transcript complete -> %s", done_path)
 
     def _flush_turn(self):
         text = self._current_text.strip()

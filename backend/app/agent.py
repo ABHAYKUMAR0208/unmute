@@ -158,6 +158,7 @@ RULES
     async def cleanup():
         playback_task.cancel()
         transcript_writer.flush_pending()
+        transcript_writer.mark_complete()
         await session.close()
 
     ctx.add_shutdown_callback(cleanup)

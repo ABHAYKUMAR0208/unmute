@@ -89,6 +89,9 @@ IMPORTANT: Always include ALL fields in your response, even if the value is "pen
 
 Always set status to "pending".
 urgency is "urgent" if guest expressed urgency or discomfort, otherwise "normal".
+
+CRITICAL — multiple items: guests often order more than one distinct item in a single request. The "items" array must contain ONE ENTRY PER DISTINCT ITEM mentioned, each with its own correct quantity. Never collapse multiple items into one entry, and never drop items after the first one. Example — transcript:  Guest: I'd like to order 2 burgers and 3 pizzas to room 305.  Agent: Got it, 2 burgers and 3 pizzas to room 305. Anything else?   Guest: No that's all. Correct extraction (note: two separate entries, correct quantities each):{"service_type": "food_order","room_number": "305","items": [{"name": "burger", "quantity": 2},{"name": "pizza", "quantity": 3}],"delivery_deadline": null,"special_notes": null,"urgency": "normal","status": "pending"} WRONG (do not do this — missing the second item):{"service_type": "food_order", "room_number": "305", "items": [{"name": "burger", "quantity": 2}], ...} WRONG (do not do this — quantities merged/confused):{"service_type": "food_order", "room_number": "305", "items": [{"name": "burger and pizza", "quantity": 5}], ...} Apply this same one-entry-per-distinct-item rule to "laundry" items too.
+
 """
 
 
@@ -140,13 +143,16 @@ def parse_jsonl_transcript(raw: str) -> tuple[str, dict]:
 def extract(transcript: str, metadata: dict | None = None) -> dict:
     """Sends transcript to Phi-3 Mini via Ollama, returns structured dict."""
     payload = {
-        "model": "phi3:mini",
+        "model": "qwen2.5:14b",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": transcript},
         ],
         "stream": False,
         "format": "json",  # forces Ollama to return valid JSON
+        "options": {"temperature": 0,   # deterministic — this is extraction, not creative generation
+                    "seed": 42,         # same input -> same output, every run
+                    "top_p": 1.0},
     }
 
     logger.debug("Calling Ollama at %s", settings.ollama_url)
