@@ -5,6 +5,9 @@ PayU payment-link notifications.
 Unlike SMS, plain transactional email has no DLT-style restriction — any
 subject/body is fine. This is a straight generalization of
 taxi_worker.py's send_confirmation_email, minus the taxi-specific fields.
+
+Now supports HTML bodies (with an optional plain-text fallback) so callers
+can send branded templates instead of raw text.
 """
 
 from __future__ import annotations
@@ -22,7 +25,23 @@ SENDGRID_FROM_NAME = os.getenv("HOTEL_NAME", "Grand Hotel")
 SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
-def send_email(to_email: str, to_name: str, subject: str, body: str) -> bool:
+def send_email(
+    to_email: str,
+    to_name: str,
+    subject: str,
+    body: str,
+    html_body: str | None = None,
+) -> bool:
+    """
+    Send a transactional email via SendGrid.
+
+    - If html_body is provided, the email is sent as multipart
+      (text/plain fallback + text/html) — recommended for anything
+      guest-facing, since plain text is what triggers spam filters and
+      looks unpolished.
+    - If html_body is omitted, behavior is unchanged from before
+      (plain text only) — existing callers keep working with no edits.
+    """
     if not SENDGRID_API_KEY:
         logger.warning("SENDGRID_API_KEY not set — skipping email")
         return False
@@ -37,10 +56,15 @@ def send_email(to_email: str, to_name: str, subject: str, body: str) -> bool:
         "Authorization": f"Bearer {SENDGRID_API_KEY}",
         "Content-Type": "application/json",
     }
+
+    content = [{"type": "text/plain", "value": body}]
+    if html_body:
+        content.append({"type": "text/html", "value": html_body})
+
     payload = {
         "personalizations": [{"to": [{"email": to_email, "name": to_name}], "subject": subject}],
         "from": {"email": SENDGRID_FROM_EMAIL, "name": SENDGRID_FROM_NAME},
-        "content": [{"type": "text/plain", "value": body}],
+        "content": content,
     }
 
     try:

@@ -37,7 +37,8 @@ CRM push + SMS/email are now wired in below:
       skipped rather than pushed with fabricated fields.
     - notifications.sms.send_sms / notifications.email.send_email send the
       payment link to the guest's phone/email, not just the browser data
-      channel.
+      channel. The email is now a branded HTML template (see
+      notifications/email_templates.py) with a plain-text fallback.
     - _sync_payment_to_crm() pushes a "payment" HubSpot record once the
       bill's status resolves (see _poll_for_confirmation).
 """
@@ -56,6 +57,7 @@ from .payu_client import PayUClient
 from .service_catalog import get_catalog
 from ..crm.hubspot_client import push as crm_push, HubSpotConfigError
 from ..notifications.email import send_email
+from ..notifications.email_templates import render_bill_email
 from ..notifications.sms import send_sms
 from ..taxi.hubspot_client import fetch_guest as fetch_guest_from_hubspot
 
@@ -183,6 +185,7 @@ def _extract_guest_info(turns: list[tuple[str, str]]) -> dict:
     if email_m:
         info["guest_email"] = email_m.group(0)
     return info
+
 
 def _merge_guest_info_with_hubspot(room_number: str, transcript_info: dict) -> dict:
     """
@@ -376,9 +379,12 @@ class PaymentBridge:
         )
 
         # Send the payment link to the guest's phone + email, not just the
-        # browser data channel.
+        # browser data channel. Pass the real `bill` object (not bill_text)
+        # so the HTML template can read line items, subtotal, tax, etc.
+        # directly instead of re-parsing formatted text. room_number is
+        # passed explicitly since it isn't stored inside guest_info.
         await asyncio.to_thread(
-            self._notify_guest, guest_info, payment_link, bill_text, bill.total
+            self._notify_guest, guest_info, payment_link, bill, bill.total, room_number
         )
 
         task = asyncio.ensure_future(self._poll_for_confirmation(bill.order_id, room_number))
@@ -456,7 +462,26 @@ class PaymentBridge:
 
     # ── Notifications ────────────────────────────────────────────────────
 
-    def _notify_guest(self, guest_info: dict, payment_link: str, bill_text: str, total: float) -> None:
+    def _notify_guest(
+        self,
+        guest_info: dict,
+        payment_link: str,
+        bill,
+        total: float,
+        room_number: str,
+    ) -> None:
+        """
+        Sends the payment link to the guest via SMS + a branded HTML email.
+
+        NOTE ON FIELD NAMES: bill.items, item.unit_price, bill.subtotal,
+        bill.tax_rate, bill.tax_amount, bill.order_id, and
+        bill.service_type below are inferred from what
+        bill_generator.format_bill_text() prints (see the plain-text
+        fallback), since models.py wasn't available when this was written.
+        Verify these against your actual Bill/BillItem dataclass fields in
+        app/payments/models.py before relying on this in production —
+        if a name is wrong you'll get an AttributeError right here.
+        """
         guest_name = guest_info.get("guest_name", "Guest")
         phone = guest_info.get("guest_phone", "")
         email = guest_info.get("guest_email", "")
@@ -469,16 +494,53 @@ class PaymentBridge:
         if not sms_ok:
             logger.info("Payment-link SMS not sent (see notifications/sms.py docstring for setup)")
 
+        bill_gen = self._get_bill_generator()
+
+        try:
+            items_rows_html = "".join(
+                f'<tr><td style="padding:6px 0;font-size:14px;color:#1f2933;">'
+                f'{item.name} <span style="color:#6b7280;">\u00d7{item.quantity}</span></td>'
+                f'<td style="padding:6px 0;font-size:14px;color:#1f2933;text-align:right;">'
+                f'\u20b9{item.quantity * item.unit_price:.2f}</td></tr>'
+                for item in bill.items
+            )
+
+            subject, html_body = render_bill_email(
+                guest_name=guest_name,
+                service_label=bill.service_type.value.replace("_", " ").title(),
+                bill_id=bill.order_id,
+                room_number=room_number,
+                items_rows_html=items_rows_html,
+                subtotal=f"\u20b9{bill.subtotal:.2f}",
+                tax_label=f"GST @ {bill.tax_rate:.0f}%",
+                tax_amount=f"\u20b9{bill.tax_amount:.2f}",
+                total=f"\u20b9{total:.2f}",
+                payment_link=payment_link,
+            )
+        except AttributeError:
+            # Field names on `bill`/`item` didn't match models.py — fall
+            # back to a plain email rather than crashing the whole
+            # notification step (SMS above has already gone out).
+            logger.exception(
+                "Bill field mismatch while building HTML email — check "
+                "app/payments/models.py against email_templates.py. "
+                "Falling back to plain text only."
+            )
+            subject = "Your bill is ready — pay online"
+            html_body = None
+
+        text_body = (
+            f"Dear {guest_name},\n\n"
+            f"{bill_gen.format_bill_text(bill)}\n\n"
+            f"Pay securely here: {payment_link}\n\nThank you!"
+        )
+
         email_ok = send_email(
             to_email=email,
             to_name=guest_name,
-            subject="Your bill is ready — pay online",
-            body=(
-                f"Dear {guest_name},\n\n"
-                f"{bill_text}\n\n"
-                f"Pay securely here: {payment_link}\n\n"
-                f"Thank you!"
-            ),
+            subject=subject,
+            body=text_body,
+            html_body=html_body,
         )
         if not email_ok:
             logger.info("Payment-link email not sent (check SENDGRID_* env vars)")
@@ -538,4 +600,3 @@ class PaymentBridge:
                 return
 
         logger.warning("Payment confirmation wait timed out for order=%s", order_id)
-

@@ -25,6 +25,7 @@ from typing import Optional, List
 
 import requests
 from dotenv import load_dotenv
+from app.notifications.email_templates import render_taxi_confirmation
 
 load_dotenv(override=True)
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
@@ -195,59 +196,32 @@ def send_confirmation_email(booking_id: str, guest: GuestData, driver: dict) -> 
         log.warning("SENDGRID_FROM_EMAIL not set — skipping email")
         return False
 
-    url     = "https://api.sendgrid.com/v3/mail/send"
-    headers = {
-        "Authorization": f"Bearer {SENDGRID_API_KEY}",
-        "Content-Type":  "application/json",
-    }
+    subject, html_body = render_taxi_confirmation(booking_id, guest, driver)
 
-    subject = f"Taxi Booking Confirmed — {booking_id}"
-    body    = f"""Dear {guest.guest_name},
+    # Plain-text fallback for clients that don't render HTML
+    text_body = (
+        f"Dear {guest.guest_name},\n\n"
+        f"Your taxi booking is confirmed!\n\n"
+        f"Booking ID: {booking_id}\n"
+        f"Room Number: {guest.room_number}\n"
+        f"Destination: {guest.destination}\n"
+        f"Pickup From: {guest.pickup_location}\n"
+        f"Pickup Time: {guest.pickup_time}\n\n"
+        f"Driver: {driver['name']} | {driver['phone']} | {driver['vehicle']}\n\n"
+        f"Please be ready at {guest.pickup_location} at {guest.pickup_time}."
+    )
 
-Your taxi booking is confirmed!
-
-Booking Details:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Booking ID     : {booking_id}
-Room Number    : {guest.room_number}
-Destination    : {guest.destination}
-Pickup From    : {guest.pickup_location}
-Pickup Time    : {guest.pickup_time}
-
-Driver Details:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Driver Name    : {driver['name']}
-Driver Phone   : {driver['phone']}
-Vehicle Number : {driver['vehicle']}
-
-Please be ready at {guest.pickup_location} at {guest.pickup_time}.
-
-Have a safe journey!
-Grand View Hotel
-"""
-
-    payload = {
-        "personalizations": [
-            {
-                "to":      [{"email": guest.guest_email, "name": guest.guest_name}],
-                "subject": subject,
-            }
-        ],
-        "from":    {"email": SENDGRID_FROM_EMAIL, "name": "Grand View Hotel"},
-        "content": [{"type": "text/plain", "value": body}],
-    }
-
-    try:
-        r = requests.post(url, json=payload, headers=headers, timeout=10)
-        if r.status_code == 202:
-            log.info(f"Email sent → {guest.guest_email} | Booking {booking_id}")
-            return True
-        log.error(f"SendGrid error: {r.status_code} | {r.text}")
-        return False
-    except Exception as e:
-        log.error(f"SendGrid failed: {e}")
-        return False
-
+    from app.notifications.email import send_email
+    ok = send_email(
+        to_email=guest.guest_email,
+        to_name=guest.guest_name,
+        subject=subject,
+        body=text_body,
+        html_body=html_body,
+    )
+    if ok:
+        log.info(f"Email sent → {guest.guest_email} | Booking {booking_id}")
+    return ok
 
 # ── TaxiWorker ─────────────────────────────────────────────────────────────────
 
