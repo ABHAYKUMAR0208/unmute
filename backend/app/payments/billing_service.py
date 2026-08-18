@@ -18,6 +18,13 @@ current schema are billed this way: food_order, laundry. "taxi" and
 "maintenance" don't carry billable items in the current extraction
 schema (see SYSTEM_PROMPT in extractor.py) and are skipped — logged, not
 billed, not guessed at with fabricated fields.
+
+Email: sends a branded HTML bill (notifications/email_templates.py) with
+a plain-text fallback, same as taxi_worker.py and payment_bridge.py.
+subtotal/tax are computed here from `bill_items` (confirmed fields:
+.name, .quantity, .unit_price) and `bill.total` (confirmed field),
+rather than guessing at possibly-nonexistent Bill.subtotal /
+Bill.tax_rate attributes.
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ from .models import BillItem, ServiceRequest, ServiceType
 from .payu_client import PayUClient
 from .service_catalog import lookup_price_with_addons
 from ..notifications.email import send_email
+from ..notifications.email_templates import render_bill_email
 from ..notifications.sms import send_sms, send_payment_ready_otp_style
 from ..taxi.hubspot_client import fetch_guest as fetch_guest_from_hubspot
 
@@ -39,6 +47,11 @@ logger = logging.getLogger("payments.billing_service")
 _CRM_TO_PAYMENTS_SERVICE_TYPE = {
     "food_order": ServiceType.FOOD_ORDER,
     "laundry": ServiceType.LAUNDRY,
+}
+
+_SERVICE_LABELS = {
+    "food_order": "Food Order",
+    "laundry": "Laundry",
 }
 
 # Lazily-built singletons — same pattern PaymentBridge used, just moved
@@ -67,6 +80,19 @@ def _get_payu_client() -> PayUClient:
     if _payu_client is None:
         _payu_client = PayUClient(_get_settings())
     return _payu_client
+
+
+def _build_items_rows_html(bill_items: list[BillItem]) -> str:
+    rows = []
+    for item in bill_items:
+        amount = item.quantity * item.unit_price
+        rows.append(
+            f'<tr><td style="padding:6px 0;font-size:14px;color:#1f2933;">'
+            f'{item.name} <span style="color:#6b7280;">\u00d7{item.quantity}</span></td>'
+            f'<td style="padding:6px 0;font-size:14px;color:#1f2933;text-align:right;">'
+            f'\u20b9{amount:.2f}</td></tr>'
+        )
+    return "".join(rows)
 
 
 def create_bill_from_crm_data(data: dict) -> Optional[dict]:
@@ -180,14 +206,46 @@ def create_bill_from_crm_data(data: dict) -> Optional[dict]:
         if not otp_ok:
             logger.info("Neither Flow-API SMS nor OTP-style fallback sent for order %s", bill.order_id)
 
+    # Build the branded HTML email. subtotal/tax are derived from
+    # bill_items + bill.total (both confirmed fields) rather than reading
+    # possibly-nonexistent attributes off `bill` directly — if that
+    # derivation itself fails for some reason, fall back to a plain email
+    # instead of dropping the notification entirely.
+    subject = "Your bill is ready — pay online"
+    html_body = None
+    try:
+        items_rows_html = _build_items_rows_html(bill_items)
+        subtotal = sum(i.quantity * i.unit_price for i in bill_items)
+        tax_amount = bill.total - subtotal
+        tax_rate_pct = round((tax_amount / subtotal) * 100) if subtotal > 0 else 0
+
+        subject, html_body = render_bill_email(
+            guest_name=guest_name,
+            service_label=_SERVICE_LABELS.get(service_type_str, service_type_str.replace("_", " ").title()),
+            bill_id=bill.order_id,
+            room_number=room_number,
+            items_rows_html=items_rows_html,
+            subtotal=f"\u20b9{subtotal:.2f}",
+            tax_label=f"GST @ {tax_rate_pct}%",
+            tax_amount=f"\u20b9{tax_amount:.2f}",
+            total=f"\u20b9{bill.total:.2f}",
+            payment_link=payment_link,
+        )
+    except Exception:
+        logger.exception(
+            "Failed to build HTML bill email for order %s — falling back to plain text",
+            bill.order_id,
+        )
+
     email_ok = send_email(
         to_email=guest_email,
         to_name=guest_name,
-        subject="Your bill is ready — pay online",
+        subject=subject,
         body=(
             f"Dear {guest_name},\n\n{bill_text}\n\n"
             f"Pay securely here: {payment_link}\n\nThank you!"
         ),
+        html_body=html_body,
     )
     if not email_ok:
         logger.info("Payment-link email not sent for order %s", bill.order_id)
